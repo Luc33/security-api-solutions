@@ -1,6 +1,6 @@
+from time import sleep
 from pymisp import PyMISP
 from pymisp import ExpandedPyMISP
-import config
 from collections import defaultdict
 import datetime
 from RequestManager import RequestManager
@@ -8,9 +8,10 @@ from RequestObject import RequestObject
 from constants import *
 import sys
 from functools import reduce
+import argparse
 
 
-def _get_events():
+def _get_events(config):
     misp = ExpandedPyMISP(config.misp_domain, config.misp_key, config.misp_verifycert)
     if len(config.misp_event_filters) == 0:
         return [event['Event'] for event in misp.search(controller='events', return_format='json')]
@@ -22,7 +23,7 @@ def _get_events():
     return [event for event in events_for_each_filter[0] if event['id'] in event_ids_intersection]
 
 
-def _graph_post_request_body_generator(parsed_events):
+def _graph_post_request_body_generator(parsed_events, config):
     for event in parsed_events:
         request_body_metadata = {
             **{field: event[field] for field in REQUIRED_GRAPH_METADATA},
@@ -59,14 +60,17 @@ def _handle_tlp_level(parsed_event):
     if 'tlpLevel' not in parsed_event:
         parsed_event['tlpLevel'] = 'red'
 
-
 def main():
     if '-r' in sys.argv:
         RequestManager.read_tiindicators()
         sys.exit()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", default="config")
+    args = parser.parse_args()
+    config = __import__(args.config)
     config.verbose_log = ('-v' in sys.argv)
     print('fetching & parsing data from misp...')
-    events = _get_events()
+    events = _get_events(config)
     parsed_events = list()
     for event in events:
         parsed_event = defaultdict(list)
@@ -91,7 +95,7 @@ def main():
 
     total_indicators = sum([len(v['request_objects']) for v in parsed_events])
     with RequestManager(total_indicators) as request_manager:
-        for request_body in _graph_post_request_body_generator(parsed_events):
+        for request_body in _graph_post_request_body_generator(parsed_events, config):
             #print(f"request body: {request_body}")
             request_manager.handle_indicator(request_body)
 
