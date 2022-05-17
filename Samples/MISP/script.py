@@ -1,4 +1,3 @@
-from time import sleep
 from pymisp import PyMISP
 from pymisp import ExpandedPyMISP
 from collections import defaultdict
